@@ -7,17 +7,11 @@ scalaVersion := "2.12.8"
 
 val libDependencyOpt = Option(System.getProperty("libDependencyOpt")).getOrElse("NONE")
 
-lazy val root = (project in file(".")).aggregate(week3)
+lazy val root = (project in file("."))//.aggregate(week3)
 
 lazy val week3 = (project in file("coursera-hmiller-week3")).
   settings(
-    //libraryDependencies ++= localLibraryDependencies
-    if (libDependencyOpt == "CLIENT") {
-      libraryDependencies ++= localLibraryDependencies
-    }
-    else {
-      libraryDependencies ++= clusterLibraryDependencies
-    }
+    libraryDependencies ++= clusterLibraryDependencies
   ).
   settings(
     assemblyMergeStrategy in assembly := {
