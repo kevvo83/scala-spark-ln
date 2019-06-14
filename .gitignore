@@ -32,3 +32,7 @@ build
 
 #general
 *.class
+
+# ignore very large resources files from the Repository
+coursera-hmiller-week3/src/main/resources/timeusage/atussum.csv
+coursera-hmiller-week2/src/main/resources/timeusage/stackoverflow.csv

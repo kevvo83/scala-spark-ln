@@ -3,7 +3,7 @@ import Dependencies._
 
 name := "scala-spark-ln-1"
 version := "0.1"
-scalaVersion := "2.12.8"
+scalaVersion := "2.11.12"
 
 val libDependencyOpt = Option(System.getProperty("libDependencyOpt")).getOrElse("NONE")
 
@@ -45,12 +45,7 @@ lazy val week3 = (project in file("coursera-hmiller-week3")).
 
 lazy val week2 = (project in file("coursera-hmiller-week2")).
   settings(
-    if (libDependencyOpt == "CLIENT") {
-      libraryDependencies ++= localLibraryDependencies
-    }
-    else {
-      libraryDependencies ++= clusterLibraryDependencies
-    }
+    libraryDependencies ++= clusterLibraryDependencies
   ).
   settings(
     test in assembly := {}

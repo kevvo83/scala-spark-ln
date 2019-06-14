@@ -14,14 +14,14 @@ object TimeUsage {
 
   val projectPath = System.getProperty("user.dir")
 
-  val spark: SparkSession = SparkSession
+  lazy val spark: SparkSession = SparkSession
     .builder()
     .appName("Time Usage")
     .config("spark.master", Option[String](System.getenv("SPARKMASTER")).getOrElse("local[*]"))
     .enableHiveSupport()
     .config("spark.sql.warehouse.dir", Option[String](System.getenv("WAREHOUSEDIR")).getOrElse(s"${projectPath}/spark-warehouse/"))
     .getOrCreate()
-  val sc: SparkContext = spark.sparkContext
+  lazy val sc: SparkContext = spark.sparkContext
 
   import spark.implicits._
 
@@ -67,7 +67,15 @@ object TimeUsage {
       rdd
         .mapPartitionsWithIndex((i, it) => if (i == 0) it.drop(1) else it) // skip the header line
         .map(_.split(",").to[List])
-        .map(row)
+        .map(line => {
+          val inhead: String = line.head
+          val intail: List[Double] = for (v <- line.tail) yield java.lang.Double.parseDouble(v)
+
+          val r1: Row = Row.apply(inhead)
+          val r2: Row = Row.fromSeq(intail)
+
+          Row.merge(r1, r2)
+        })
 
     val dataFrame =
       spark.createDataFrame(data, schema)

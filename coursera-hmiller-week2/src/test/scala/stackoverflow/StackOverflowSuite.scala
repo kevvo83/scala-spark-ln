@@ -33,10 +33,9 @@ class StackOverflowSuite extends FunSuite with BeforeAndAfterAll {
   }
 
   trait TestSuite {
-    val lines = sc.textFile(Paths.get(getClass().getResource("/stackoverflow/stackoverflow.csv").toURI).toString)
+    val lines = sc.textFile(Paths.get(getClass().getResource("/stackoverflow/stackoverflow.csv").toURI).toString, 20)
 
     val raw = rawPostings(lines)
-    //val raw = sc.parallelize(raw_t.takeSample(false, 30000))
 
     val grouped = groupedPostings(raw)
     val scored = scoredPostings(grouped)
@@ -100,10 +99,10 @@ class StackOverflowSuite extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  test ("Test that NewMeans Function returns an Array[(Int, Int] of the same size") {
+  test ("Test that NewMeans Function returns an Array[(Int, Int] of size that is less than or equal to old centroid size") {
     new TestSuite {
       val newcentroids = computeNewCentroids(oldcentroids, vectors)
-      assert(newcentroids.length === oldcentroids.length, "New Centroid Length must be Equal to Old Centroid Length")
+      assert(newcentroids.length <= oldcentroids.length, "New Centroid Length must be Equal to Old Centroid Length")
     }
   }
 

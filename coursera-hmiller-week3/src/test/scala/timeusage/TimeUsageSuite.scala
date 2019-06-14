@@ -47,16 +47,17 @@ class TimeUsageSuite extends FunSuite with BeforeAndAfterAll {
 
   trait Environment2 extends Environment {
 
-    val data = spark.sparkContext.textFile(fsPath("/timeusage/atussum.csv"))
+    /*val data = spark.sparkContext.textFile(fsPath("/timeusage/atussum.csv"))
       .mapPartitionsWithIndex((i, it) => if (i == 0) it.drop(1) else it)
       .sample(false, 0.20)
       .map(_.split(",").to[List])
-      .map(row)
+      .map(row)*/
 
-    val initDf =
-      spark.createDataFrame(data, schema)
+    val (columns, initDf) = read(fsPath("/timeusage/atussum.csv"))
 
-    val summaryDf = timeUsageSummary(primaryNeedsColumns, workColumns, otherColumns, initDf)
+    val inputDf = initDf.sample(false, 0.20)
+
+    val summaryDf = timeUsageSummary(primaryNeedsColumns, workColumns, otherColumns, inputDf)
     val timeusagesummaryDs: Dataset[TimeUsageRow] = timeUsageSummaryTyped(summaryDf)
     val timeusagesummartDfwithSql = timeUsageGroupedSql(summaryDf)
 

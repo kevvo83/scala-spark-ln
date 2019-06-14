@@ -4,9 +4,10 @@ import java.nio.file.Paths
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{RangePartitioner, SparkConf, SparkContext}
+import org.apache.spark.storage.StorageLevel._
 
 import scala.annotation.tailrec
-//import stackoverflow._
+
 
 /** A raw stackoverflow posting, either a question or an answer */
 case class Posting(postingType: Int, id: Int, acceptedAnswer: Option[Int], parentId: Option[QID], score: Int, tags: Option[String]) extends Serializable
@@ -22,17 +23,18 @@ object StackOverflow extends StackOverflow {
   def main(args: Array[String]): Unit = {
 
     //val lines   = sc.textFile("coursera-hmiller-week2/src/main/resources/stackoverflow/stackoverflow.csv", appNumPartitions)
-    val lines = sc.textFile(Paths.get(getClass().getResource("/stackoverflow/stackoverflow.csv").toURI).toString)
+    val lines = sc.textFile(Paths.get(getClass().getResource("/stackoverflow/stackoverflow.csv").toURI).toString, 20)
 
     val raw     = rawPostings(lines)
     val grouped = groupedPostings(raw)
     val scored  = scoredPostings(grouped)
-    val vectors = vectorPostings(scored)
+    val vectors = vectorPostings(scored).persist(MEMORY_ONLY)
 
     val means   = kmeans(sampleVectors(vectors), vectors, debug = true)
     val results = clusterResults(means, vectors)
     printResults(results)
   }
+
 }
 
 
@@ -59,12 +61,6 @@ class StackOverflow extends Serializable {
   def kmeansMaxIterations = 120
 
 
-  //
-  //
-  // Parsing utilities:
-  //
-  //
-
   /** Load postings from the given file */
   def rawPostings(lines: RDD[String]): RDD[Posting] =
     lines.map(line => {
@@ -86,11 +82,11 @@ class StackOverflow extends Serializable {
     val qs_proc: RDD[(QID, Question)] = questions map (a=> (a.id, a))
     val ans_proc: RDD[(QID, Answer)] = answers map (b=> (b.parentId.getOrElse(0), b))
 
-    //val rp1 = new RangePartitioner(appNumPartitions, qs_proc)
-    //val qs_proc_part = qs_proc.partitionBy(rp1)
+    val rp1 = new RangePartitioner(20, qs_proc)
+    val qs_proc_part = qs_proc.partitionBy(rp1)
 
-    //val rp2 = new RangePartitioner(appNumPartitions, ans_proc)
-    //val ans_proc_part = ans_proc.partitionBy(rp1)
+    val rp2 = new RangePartitioner(20, ans_proc)
+    val ans_proc_part = ans_proc.partitionBy(rp1)
 
     ((qs_proc join ans_proc) groupByKey())
   }
@@ -111,6 +107,21 @@ class StackOverflow extends Serializable {
       highScore
     }
 
+    grouped.mapPartitions[(Question, HighScore)](it => {
+      var result: List[(Question, HighScore)] = List()
+
+      while (it.hasNext) {
+        val elem = it.next()
+        val question: Question = elem._2.head._1
+        val arrayOfAnswersForThisQID: Array[Answer] = elem._2.unzip._2.toArray
+        val highScoreAnswer:HighScore = answerHighScore(arrayOfAnswersForThisQID)
+
+        result = result :+ (question, highScoreAnswer)
+      }
+
+      result.toIterator
+    })
+
     // compare the performance using the REDUCE below, versus the def ANSWERHIGHSCORE above
 
     // Maybe pair.toArray.unzip._2 takes too much memory, as compared to the pair.map(_._2)
@@ -120,7 +131,8 @@ class StackOverflow extends Serializable {
       (q, answerHighScore(listofAnswers))
     }).map({case (qid: QID,(question: Question, hiscore: HighScore))=> (question, hiscore)} )*/
 
-    grouped.map({case (qid:QID, vals:Iterable[(Question, Answer)]) => (vals.head._1, answerHighScore(vals.map(_._2).toArray))})
+    // Previous submission
+    //grouped.map({case (qid:QID, vals:Iterable[(Question, Answer)]) => (vals.head._1, answerHighScore(vals.map(_._2).toArray))})
 
     // Look into reduceByKey
     /*val qid_vs_highestScoredAns: RDD[(QID, (Question, Answer))] =
@@ -135,6 +147,7 @@ class StackOverflow extends Serializable {
 
   /** Compute the vectors for the kmeans */
   def vectorPostings(scored: RDD[(Question, HighScore)]): RDD[(LangIndex, HighScore)] = {
+
     /** Return optional index of first language that occurs in `tags`. */
     def firstLangInTag(tag: Option[String], ls: List[String]): Option[Int] = {
       if (tag.isEmpty) None
@@ -149,10 +162,25 @@ class StackOverflow extends Serializable {
       }
     }
 
-    val res = scored map ({case (a:Question, hi:HighScore) => (firstLangInTag(a.tags, langs).getOrElse(0) * langSpread,hi)})
+    scored mapPartitions[(LangIndex, HighScore)](it => {
 
-    val rp = new RangePartitioner(10, res)
-    res.partitionBy(rp).cache()
+      var mapres: List[(LangIndex, HighScore)] = List()
+
+      while (it.hasNext) {
+        val elem = it.next()
+        mapres :+ (firstLangInTag(elem._1.tags, langs).getOrElse(1) * langSpread, elem._2)
+      }
+
+      mapres.toIterator
+    })
+
+    /*val res = scored map (
+      {case (a:Question, hi:HighScore) => (firstLangInTag(a.tags, langs).getOrElse(1) * langSpread,hi)}
+      )*/
+
+
+    //val rp = new RangePartitioner(10, res)
+    //res.partitionBy(rp).cache()
 
   }
 
@@ -201,40 +229,30 @@ class StackOverflow extends Serializable {
 
 
   def computeNewCentroids(oldcentroids: Array[(Int, Int)], vectors: RDD[(Int, Int)]): Array[(Int, (Int, Int))] = {
-    //var newCentroids: Array[(Int, Int)] = oldcentroids.clone()
 
     // 2. For each Vector in Vectors, determine to which Cluster each point belongs to
     // This is done by meas
-    val rdd_vector_vs_newcentroid: RDD[(Int, (Int, Int))] = for {
+    val rdd_newcentroid_vs_vector: RDD[(Int, (Int, Int))] = for {
       vector <- vectors
     } yield (findClosest(vector, oldcentroids), vector)
 
     // 3. Group the above Structure by Cluster
     // 3.1 Then find the mean of each new Cluster - these will be the new Centroids
-
-    // Change the Below to reduceBy!!!!!
-    val result = rdd_vector_vs_newcentroid.groupByKey().mapValues(a=> averageVectors(a)) collect()
-    result
+    rdd_newcentroid_vs_vector.groupByKey().mapValues(a=> averageVectors(a)) collect()
 
   }
 
 
-  //
-  //
-  //  Kmeans method:
-  //
-  //
-
   /** Main kmeans computation */
   @tailrec final def kmeans(means: Array[(Int, Int)], vectors: RDD[(Int, Int)], iter: Int = 1, debug: Boolean = false): Array[(Int, Int)] = {
-    var newMeans = means.clone() // you need to compute newMeans
 
-    // 1. - centroids are passed in - DONE
+    // Step 1. - centroids are passed in - DONE
+    var newMeans = means.clone() // you need to compute newMeans
 
     // Steps 2. and 3.
     val newMeans_t = computeNewCentroids(means, vectors)
 
-    // Final Step - update the newMeans structure with the newly computed centroids
+    // Step 4. - update the newMeans structure with the newly computed centroids
     for ((idx, values) <- newMeans_t) newMeans.update(idx, values)
 
     assert(means.length == newMeans.length, "Means and New Means should be of the same length")
@@ -327,7 +345,7 @@ class StackOverflow extends Serializable {
     ((comp1 / count).toInt, (comp2 / count).toInt)
   }
 
-
+  /** Helper function to compute Median */
   def calcMedian(in: List[Int]): Int = {
     val tmp:List[Int] = in sortWith ((a,b) => (a<b))
     val length: Int = tmp.length
@@ -335,12 +353,9 @@ class StackOverflow extends Serializable {
     else tmp(length/2)
   }
 
-  //
-  //
-  //  Displaying results:
-  //
-  //
+  /** Function to Cluster Vectors together and summarize the Results */
   def clusterResults(means: Array[(Int, Int)], vectors: RDD[(LangIndex, HighScore)]): Array[(String, Double, Int, Int)] = {
+
     val closest = vectors.map(p => (findClosest(p, means), p)) // (centroididx, (langidx, hiscore))
     val closestGrouped = closest.groupByKey() // (centroididx, Iterable[(langidx, hiscore)])
 
@@ -352,10 +367,6 @@ class StackOverflow extends Serializable {
       val tmp: Int = langidx_vs_numquestions.toList.unzip._2.sum
 
       val langLabel: String   = langs(langidx_vs_numquestions.maxBy(_._2)._1) // most common language in the cluster
-
-      //println("max lang" + langidx_vs_numquestions.maxBy(_._2)._1 + ", max num questions " + langidx_vs_numquestions.maxBy(_._2)._2)
-      //println("tmp val:" + tmp)
-      //println("total number of questions in cluster: " + totalNumberOfQuestionsInCluster)
 
       val langPercent: Double = (langidx_vs_numquestions.maxBy(_._2)._2 / totalNumberOfQuestionsInCluster) * 100 // percent of the questions in the most common language
       val clusterSize: Int    = totalNumberOfQuestionsInCluster
