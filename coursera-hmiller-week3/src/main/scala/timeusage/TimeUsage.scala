@@ -21,7 +21,7 @@ object TimeUsage {
     .enableHiveSupport()
     .config("spark.sql.warehouse.dir", Option[String](System.getenv("WAREHOUSEDIR")).getOrElse(s"${projectPath}/spark-warehouse/"))
     .getOrCreate()
-  lazy val sc: SparkContext = spark.sparkContext
+  @transient lazy val sc: SparkContext = spark.sparkContext
 
   import spark.implicits._
 
@@ -229,7 +229,7 @@ object TimeUsage {
     * Finally, the resulting DataFrame should be sorted by working status, sex and age.
     */
   def timeUsageGrouped(summed: DataFrame): DataFrame =  {
-    // TODO: HERE
+
     val result: DataFrame = summed.groupBy("working","sex","age").
       agg(avg("primaryNeeds"), avg("work"), avg("other"))
 

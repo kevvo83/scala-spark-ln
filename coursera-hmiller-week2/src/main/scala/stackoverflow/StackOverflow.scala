@@ -2,11 +2,14 @@ package stackoverflow
 
 import java.nio.file.Paths
 
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{RangePartitioner, SparkConf, SparkContext}
 import org.apache.spark.storage.StorageLevel._
 
 import scala.annotation.tailrec
+import java.lang.String
+import java.lang.Integer
 
 
 /** A raw stackoverflow posting, either a question or an answer */
@@ -16,14 +19,23 @@ case class Posting(postingType: Int, id: Int, acceptedAnswer: Option[Int], paren
 /** The main class */
 object StackOverflow extends StackOverflow {
 
-  @transient lazy val conf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("StackOverflow")
-  @transient lazy val sc: SparkContext = new SparkContext(conf)
+  //@transient lazy val conf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("StackOverflow")
+  //@transient lazy val sc: SparkContext = new SparkContext(conf)
 
   /** Main function */
   def main(args: Array[String]): Unit = {
 
-    //val lines   = sc.textFile("coursera-hmiller-week2/src/main/resources/stackoverflow/stackoverflow.csv", appNumPartitions)
-    val lines = sc.textFile(Paths.get(getClass().getResource("/stackoverflow/stackoverflow.csv").toURI).toString, 20)
+    val spark: SparkSession = SparkSession.builder().
+      appName("StackOverflow").
+      master(Option(System.getenv("SPARKMASTER")).getOrElse("local[*]")).
+      enableHiveSupport().config("spark.sql.warehouse.dir", Option(System.getenv("WAREHOUSEDIR")).getOrElse("")).
+      getOrCreate()
+    val sc: SparkContext = spark.sparkContext
+
+    //val ipFileDefault: String = Paths.get(getClass().getResource("/stackoverflow/stackoverflow.csv").toURI).toString
+    val ipFile: String = Option(args(0)).getOrElse("")
+
+    val lines = sc.textFile(ipFile, 20)
 
     val raw     = rawPostings(lines)
     val grouped = groupedPostings(raw)
@@ -39,27 +51,7 @@ object StackOverflow extends StackOverflow {
 
 
 /** The parsing and kmeans methods */
-class StackOverflow extends Serializable {
-
-  /** Languages */
-  val langs =
-    List(
-      "JavaScript", "Java", "PHP", "Python", "C#", "C++", "Ruby", "CSS",
-      "Objective-C", "Perl", "Scala", "Haskell", "MATLAB", "Clojure", "Groovy")
-
-  /** K-means parameter: How "far apart" languages should be for the kmeans algorithm? */
-  def langSpread = 50000
-  assert(langSpread > 0, "If langSpread is zero we can't recover the language from the input data!")
-
-  /** K-means parameter: Number of clusters */
-  def kmeansKernels = 45
-
-  /** K-means parameter: Convergence criteria */
-  def kmeansEta: Double = 20.0D
-
-  /** K-means parameter: Maximum iterations */
-  def kmeansMaxIterations = 120
-
+class StackOverflow extends Serializable with StackOverflowTrait {
 
   /** Load postings from the given file */
   def rawPostings(lines: RDD[String]): RDD[Posting] =
@@ -95,19 +87,20 @@ class StackOverflow extends Serializable {
   /** Compute the maximum score for each posting */
   def scoredPostings(grouped: RDD[(QID, Iterable[(Question, Answer)])]): RDD[(Question, HighScore)] = {
 
-    def answerHighScore(as: Array[Answer]): HighScore = {
-      var highScore = 0
-          var i = 0
-          while (i < as.length) {
-            val score = as(i).score
-                if (score > highScore)
-                  highScore = score
-                  i += 1
-          }
-      highScore
-    }
-
     grouped.mapPartitions[(Question, HighScore)](it => {
+
+      def answerHighScore(as: Array[Answer]): HighScore = {
+        var highScore = 0
+        var i = 0
+        while (i < as.length) {
+          val score = as(i).score
+          if (score > highScore)
+            highScore = score
+          i += 1
+        }
+        highScore
+      }
+
       var result: List[(Question, HighScore)] = List()
 
       while (it.hasNext) {
@@ -148,21 +141,45 @@ class StackOverflow extends Serializable {
   /** Compute the vectors for the kmeans */
   def vectorPostings(scored: RDD[(Question, HighScore)]): RDD[(LangIndex, HighScore)] = {
 
-    /** Return optional index of first language that occurs in `tags`. */
-    def firstLangInTag(tag: Option[String], ls: List[String]): Option[Int] = {
-      if (tag.isEmpty) None
-      else if (ls.isEmpty) None
-      else if (tag.get == ls.head) Some(0) // index: 0
-      else {
-        val tmp = firstLangInTag(tag, ls.tail)
-        tmp match {
-          case None => None
-          case Some(i) => Some(i + 1) // index i in ls.tail => index i+1
+    val res = scored map (ip => {
+
+      /** Return optional index of first language that occurs in `tags`. */
+      def firstLangInTag (tag: Option[String], ls: List[String]): Option[Int] = {
+
+        if (tag.isEmpty) None
+        else if (ls.isEmpty) None
+        else if (tag.get == ls.head) Some(0) // index: 0
+        else {
+          val tmp = firstLangInTag(tag, ls.tail)
+          tmp match {
+            case None => None
+            case Some(i) => Some(i + 1) // index i in ls.tail => index i+1
+          }
         }
       }
-    }
+
+      ip match {
+        case (a:Question, hi:HighScore) => (firstLangInTag(a.tags, langs).getOrElse(1) * langSpread,hi)
+      }
+
+    })
 
     scored mapPartitions[(LangIndex, HighScore)](it => {
+
+      /** Return optional index of first language that occurs in `tags`. */
+      def firstLangInTag (tag: Option[String], ls: List[String]): Option[Int] = {
+
+        if (tag.isEmpty) None
+        else if (ls.isEmpty) None
+        else if (tag.get == ls.head) Some(0) // index: 0
+        else {
+          val tmp = firstLangInTag(tag, ls.tail)
+          tmp match {
+            case None => None
+            case Some(i) => Some(i + 1) // index i in ls.tail => index i+1
+          }
+        }
+      }
 
       var mapres: List[(LangIndex, HighScore)] = List()
 
@@ -174,13 +191,8 @@ class StackOverflow extends Serializable {
       mapres.toIterator
     })
 
-    /*val res = scored map (
-      {case (a:Question, hi:HighScore) => (firstLangInTag(a.tags, langs).getOrElse(1) * langSpread,hi)}
-      )*/
-
-
-    //val rp = new RangePartitioner(10, res)
-    //res.partitionBy(rp).cache()
+    val rp = new RangePartitioner(10, res)
+    res.partitionBy(rp)//.persist(MEMORY_ONLY)
 
   }
 
@@ -257,7 +269,6 @@ class StackOverflow extends Serializable {
 
     assert(means.length == newMeans.length, "Means and New Means should be of the same length")
 
-    // TODO: Fill in the newMeans array
     val distance = euclideanDistance(means, newMeans)
 
     if (debug) {

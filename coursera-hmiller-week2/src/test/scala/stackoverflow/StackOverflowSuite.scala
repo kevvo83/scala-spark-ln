@@ -6,6 +6,8 @@ import org.scalatest.{BeforeAndAfterAll, FunSuite}
 import java.nio.file.Paths
 
 import StackOverflow._
+import org.apache.spark.SparkContext
+import org.apache.spark.sql.SparkSession
 
 @RunWith(classOf[JUnitRunner])
 class StackOverflowSuite extends FunSuite with BeforeAndAfterAll {
@@ -33,13 +35,17 @@ class StackOverflowSuite extends FunSuite with BeforeAndAfterAll {
   }
 
   trait TestSuite {
-    val lines = sc.textFile(Paths.get(getClass().getResource("/stackoverflow/stackoverflow.csv").toURI).toString, 20)
+    val spark = SparkSession.builder().appName("Test-StackOverflowSuite").master("local[*]").getOrCreate()
+    val sc: SparkContext = spark.sparkContext
+    val lines = sc.textFile(Paths.get(getClass().
+                    getResource("/stackoverflow/stackoverflow.csv").toURI).
+                    toString, 20).sample(false, 0.3)
 
     val raw = rawPostings(lines)
 
     val grouped = groupedPostings(raw)
-    val scored = scoredPostings(grouped)
-    val vectors = vectorPostings(scored)
+    val scored = scoredPostings(grouped).persist()
+    val vectors = vectorPostings(scored).persist()
 
     val oldcentroids: Array[(Int, Int)] = sampleVectors(vectors)
 
