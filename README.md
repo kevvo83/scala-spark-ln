@@ -32,7 +32,7 @@ sudo spark-submit --class stackoverflow.StackOverflow \
 --conf spark.executor.memory=8g --conf spark.driver.memory=1g \
 --conf spark.driver.cores=1 --conf spark.logConf=true \
 --conf spark.yarn.appMasterEnv.SPARKMASTER=yarn \
---conf spark.yarn.appMasterEnv.WAREHOUSEDIR=s3a://simplesparkprojectartifacts-545166653627/spark-warehouse \
+--conf spark.yarn.appMasterEnv.WAREHOUSEDIR=s3a://***S3 OUTPUT BUCKET***/spark-warehouse \
 --conf spark.yarn.jars=/usr/lib/spark/jars/*.jar \
 --conf spark.yarn.preserve.staging.files=true \
 --conf spark.executorEnv.SPARK_HOME=/usr/lib/spark/ \
