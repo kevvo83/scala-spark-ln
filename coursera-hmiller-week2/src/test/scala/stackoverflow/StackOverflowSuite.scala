@@ -39,13 +39,13 @@ class StackOverflowSuite extends FunSuite with BeforeAndAfterAll {
     val sc: SparkContext = spark.sparkContext
     val lines = sc.textFile(Paths.get(getClass().
                     getResource("/stackoverflow/stackoverflow.csv").toURI).
-                    toString, 20).sample(false, 0.3)
+                    toString, 20)//.sample(false, 0.3)
 
     val raw = rawPostings(lines)
 
     val grouped = groupedPostings(raw)
-    val scored = scoredPostings(grouped).persist()
-    val vectors = vectorPostings(scored).persist()
+    val scored = scoredPostings(grouped)
+    val vectors = vectorPostings(scored)
 
     val oldcentroids: Array[(Int, Int)] = sampleVectors(vectors)
 

@@ -3,6 +3,47 @@
 ## Introduction
 Spark and Scala learning submissions for EPFL courses.
 
+## StackOverflow forum posts analysis
+
+The [dataset](http://alaska.epfl.ch/~dockermoocs/bigdata/stackoverflow.csv) used is a StackOverflow data dump of questions and answers.
+
+The project implements a distributed k-mean clustering computation to determine the highest rated answers for different programming languages.
+
+The intention is to determine which programming languages have more supportive communities of users and documentation. 
+
+### Build & Assemble Instructions
+
+`git clone https://github.com/kevvo83/scala-spark-ln.git`
+
+`sbt clean compile week2/assembly`
+
+(Note: You may need to download the SBT utility)
+
+### Spark Job Submit Instructions
+
+The Assembly Jar should be downloaded to local location (I've used the HDFS location `/home/ec2-user/` on EMR).
+
+To submit directly on the Master server, SSH to the Master server and run this command (tested on AWS EMR) -
+
+```
+sudo spark-submit --class stackoverflow.StackOverflow \
+--deploy-mode cluster --master yarn \
+--num-executors 3 --conf spark.executor.cores=3 \
+--conf spark.executor.memory=8g --conf spark.driver.memory=1g \
+--conf spark.driver.cores=1 --conf spark.logConf=true \
+--conf spark.yarn.appMasterEnv.SPARKMASTER=yarn \
+--conf spark.yarn.appMasterEnv.WAREHOUSEDIR=s3a://simplesparkprojectartifacts-545166653627/spark-warehouse \
+--conf spark.yarn.jars=/usr/lib/spark/jars/*.jar \
+--conf spark.yarn.preserve.staging.files=true \
+--conf spark.executorEnv.SPARK_HOME=/usr/lib/spark/ \
+--conf spark.network.timeout=600000 \
+--conf spark.default.parallelism=20 \
+--files /usr/lib/spark/conf/spark-defaults.conf \
+--jars /home/ec2-user/week2-assembly-0.2.0-SNAPSHOT.jar \
+/home/ec2-user/week2-assembly-0.2.0-SNAPSHOT.jar \
+/user/spark/stackoverflow.csv
+```
+
 ## TimeUsage analysis
 
 The [dataset](http://alaska.epfl.ch/~dockermoocs/bigdata/atussum.csv) used is the Activity Summary file 

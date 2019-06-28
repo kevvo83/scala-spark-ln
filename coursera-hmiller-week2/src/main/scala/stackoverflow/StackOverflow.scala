@@ -40,7 +40,7 @@ object StackOverflow extends StackOverflow {
     val raw     = rawPostings(lines)
     val grouped = groupedPostings(raw)
     val scored  = scoredPostings(grouped)
-    val vectors = vectorPostings(scored).persist(MEMORY_ONLY)
+    val vectors = vectorPostings(scored)
 
     val means   = kmeans(sampleVectors(vectors), vectors, debug = true)
     val results = clusterResults(means, vectors)
@@ -101,40 +101,14 @@ class StackOverflow extends Serializable with StackOverflowTrait {
         highScore
       }
 
-      var result: List[(Question, HighScore)] = List()
+      it.map(a => {
+        val question: Question = a._2.head._1
+        val arrayOfAnswersForThisQID: Array[Answer] = a._2.unzip._2.toArray[Answer]
+        val highScoreAnswer: HighScore = answerHighScore(arrayOfAnswersForThisQID)
+        (question, highScoreAnswer)
+      })
 
-      while (it.hasNext) {
-        val elem = it.next()
-        val question: Question = elem._2.head._1
-        val arrayOfAnswersForThisQID: Array[Answer] = elem._2.unzip._2.toArray
-        val highScoreAnswer:HighScore = answerHighScore(arrayOfAnswersForThisQID)
-
-        result = result :+ (question, highScoreAnswer)
-      }
-
-      result.toIterator
     })
-
-    // compare the performance using the REDUCE below, versus the def ANSWERHIGHSCORE above
-
-    // Maybe pair.toArray.unzip._2 takes too much memory, as compared to the pair.map(_._2)
-    /*grouped.mapValues(pair => {
-      val listofAnswers: Array[Answer] = pair.toArray.unzip._2
-      val q: Question = pair.toArray.unzip._1(0)
-      (q, answerHighScore(listofAnswers))
-    }).map({case (qid: QID,(question: Question, hiscore: HighScore))=> (question, hiscore)} )*/
-
-    // Previous submission
-    //grouped.map({case (qid:QID, vals:Iterable[(Question, Answer)]) => (vals.head._1, answerHighScore(vals.map(_._2).toArray))})
-
-    // Look into reduceByKey
-    /*val qid_vs_highestScoredAns: RDD[(QID, (Question, Answer))] =
-      (grouped.mapValues((e:Iterable[(Question, Answer)]) => e reduce[(Question, Answer)]
-        ((l:(Question, Answer), r:(Question, Answer)) =>
-          if (l._2.score > r._2.score) l else r)))
-
-    qid_vs_highestScoredAns.map({case (a:QID, b:(Question, Answer)) => (b._1, b._2.score)})*/
-
   }
 
 
@@ -181,18 +155,14 @@ class StackOverflow extends Serializable with StackOverflowTrait {
         }
       }
 
-      var mapres: List[(LangIndex, HighScore)] = List()
+      it.map(a => {
+        (firstLangInTag(a._1.tags, langs).getOrElse(1) * langSpread, a._2)
+      })
 
-      while (it.hasNext) {
-        val elem = it.next()
-        mapres :+ (firstLangInTag(elem._1.tags, langs).getOrElse(1) * langSpread, elem._2)
-      }
-
-      mapres.toIterator
     })
 
     val rp = new RangePartitioner(10, res)
-    res.partitionBy(rp)//.persist(MEMORY_ONLY)
+    res.partitionBy(rp).persist(MEMORY_AND_DISK)
 
   }
 
