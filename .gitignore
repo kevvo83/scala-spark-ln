@@ -36,3 +36,12 @@ build
 # ignore very large resources files from the Repository
 coursera-hmiller-week3/src/main/resources/timeusage/atussum.csv
 coursera-hmiller-week2/src/main/resources/timeusage/stackoverflow.csv
+
+# ignore the experimentations in this module
+struct-stream-apps/
+struct-stream-apps/*
+
+# ignore the zepellin notebook, log directories
+notebook/
+logs/
+sourcedatafiles

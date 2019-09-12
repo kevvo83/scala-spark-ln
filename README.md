@@ -1,25 +1,42 @@
-# scala-spark-ln repo
+# Spark Project submission
 
 ## Introduction
-Spark and Scala learning submissions for EPFL courses.
 
-## StackOverflow forum posts analysis
+This repository is of Spark Project submissions, which were requirements of EPFL's [Spark course](https://www.coursera.org/learn/scala-spark-big-data/home/welcome) on coursera.
 
-The [dataset](http://alaska.epfl.ch/~dockermoocs/bigdata/stackoverflow.csv) used is a StackOverflow data dump of questions and answers.
+The individual submissions have been packaged into a multi-module Scala project, and deployed and run on an [AWS EMR](https://aws.amazon.com/emr/) cluster, which were running Spark, Hive and Zepellin.
 
+The `spark-submit` and `sbt` instructions below will work on a Spark YARN cluster as well as Spark Local.
+
+## Week2 - StackOverflow forum posts analysis
+
+#### Context
+The context is analyzing a csv dump of StackOverflow posts and look at the ratings of user-provided answers (based on user votes).  
+The motivation is to answer questions such as -
+* Which programming languages on StackOverflow are commonly referenced by the community?
+* Which programming languages typically have the highest and lowest rated answers to questions?  
+
+The answers to the above questions indicate respectively -
+* The demand for those programming languages in the industry
+* The quality of documentation / community support for those programming languages
+
+#### Data
+The data source is this [dataset](http://alaska.epfl.ch/~dockermoocs/bigdata/stackoverflow.csv).
+
+#### Implementation details
 The project implements a distributed k-mean clustering computation to determine the highest rated answers for different programming languages.
 
 The intention is to determine which programming languages have more supportive communities of users and documentation. 
 
-### Build & Assemble Instructions
+#### Build Instructions
 
-`git clone https://github.com/kevvo83/scala-spark-ln.git`
+Use the following commands to build the Assembly/Fat/Uber Jar.
+```
+git clone https://github.com/kevvo83/scala-spark-ln.git
+sbt clean compile week2/assembly
+```
 
-`sbt clean compile week2/assembly`
-
-(Note: You may need to download the SBT utility)
-
-### Spark Job Submit Instructions
+#### Execution Instructions
 
 The Assembly Jar should be downloaded to local location (I've used the HDFS location `/home/ec2-user/` on EMR).
 
@@ -44,6 +61,15 @@ sudo spark-submit --class stackoverflow.StackOverflow \
 /user/spark/stackoverflow.csv
 ```
 
+#### Results, Reporting and Interpretation
+
+The clustering results are plotted in the scatterplot below. The Zepellin notebook used to generate this plot is here and can be imported if needed.
+
+For clusters that have a large number of Questions, the point's size will be larger.  
+For clusters that have a high Score, the point's size will have a darker colour.
+
+ 
+
 ## TimeUsage analysis
 
 The [dataset](http://alaska.epfl.ch/~dockermoocs/bigdata/atussum.csv) used is the Activity Summary file 
@@ -51,7 +77,7 @@ of the [American Time Use Survey](https://www.kaggle.com/bls/american-time-use-s
 
 ### Dashboard
 
-The TimeUsage Zeppelin Dashboard is checked in [here](TimeUsage.json). It can be imported and viewed in your own Zepellin instance.
+The TimeUsage Zeppelin Dashboard is checked in [here](notebooks/TimeUsage.json). It can be imported and viewed in your own Zepellin instance.
 
 The Dashboard does a comparison of time spending characteristics between -
 

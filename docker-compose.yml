@@ -1,0 +1,21 @@
+version: "3.3"
+
+services:
+
+  zepellin:
+    image: apache/zeppelin:0.8.0
+    ports:
+    - 9099:8080
+    volumes:
+      - ./notebooks:/notebook
+      - ./logs:/logs
+      - ./sourcedatafiles:/sourcedatafiles
+    environment:
+      - ZEPPELIN_LOG_DIR=/logs
+      - ZEPPELIN_NOTEBOOK_DIR=/notebooks
+    networks:
+      - pg_def
+
+networks:
+  pg_def:
+    driver: bridge
