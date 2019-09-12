@@ -11,14 +11,10 @@ The `spark-submit` and `sbt` instructions below will work on a Spark YARN cluste
 ## Week2 - StackOverflow forum posts analysis
 
 #### Context
-The context is analyzing a csv dump of StackOverflow posts and look at the ratings of user-provided answers (based on user votes).  
-The motivation is to answer questions such as -
-* Which programming languages on StackOverflow are commonly referenced by the community?
-* Which programming languages typically have the highest and lowest rated answers to questions?  
 
-The answers to the above questions indicate respectively -
-* The demand for those programming languages in the industry
-* The quality of documentation / community support for those programming languages
+The intent of this module is to analyze a dump file of StackOverflow posts, and categorize posts based on tags and scores.
+
+The end goal, is to determine which topics (will be in the tags) are most commonly discussed, and best understood in the community.
 
 #### Data
 The data source is this [dataset](http://alaska.epfl.ch/~dockermoocs/bigdata/stackoverflow.csv).
@@ -63,35 +59,38 @@ sudo spark-submit --class stackoverflow.StackOverflow \
 
 #### Results, Reporting and Interpretation
 
-The clustering results are plotted in the scatterplot below. The Zepellin notebook used to generate this plot is here and can be imported if needed.
+The clustering results are plotted in the scatterplot below. The Zepellin notebook used to generate this plot is [here](notebooks/Week2%20Results,%20Reporting%20and%20Interpretation.json) and can be imported if needed.
 
-For clusters that have a large number of Questions, the point's size will be larger.  
-For clusters that have a high Score, the point's size will have a darker colour.
+Each cluster is represented by a point on the plot below. The number of questions in a cluster determine the size of the point. The score determines the hue of the point.
 
- 
+![Week2 Results](images/week2results.png)
 
-## TimeUsage analysis
+## Week 3 - TimeUsage analysis
 
+#### Context
+
+The American Time Use Survey (ATUS) is the Nation’s first federally administered, continuous survey on time use in the United States. The goal of the survey is to measure how people divide their time among life’s activities.
+
+#### Data
 The [dataset](http://alaska.epfl.ch/~dockermoocs/bigdata/atussum.csv) used is the Activity Summary file 
 of the [American Time Use Survey](https://www.kaggle.com/bls/american-time-use-survey) on Kaggle.
 
-### Dashboard
+#### Implementation Details
 
-The TimeUsage Zeppelin Dashboard is checked in [here](notebooks/TimeUsage.json). It can be imported and viewed in your own Zepellin instance.
+The project first categorizes activities as -
+* primary needs (sleeping and eating),
+* work,
+* other (leisure)
 
-The Dashboard does a comparison of time spending characteristics between -
-
-1. Employed Men vs. Women of working age
-2. Employed Men vs. Unemployed Men of working age
-
-![TimeUsage Dashboard](images/TimeUsageDashboard.png).
+And then moves on to aggregate and bucket the proportion of time spent by people of different backgrounds.
 
 
 ### Build & Assemble Instructions
 
-`git clone https://github.com/kevvo83/scala-spark-ln.git`
-
-`sbt clean update week3/compile week3/assembly`
+```
+git clone https://github.com/kevvo83/scala-spark-ln.git
+sbt clean update week3/compile week3/assembly
+```
 
 (Note: You may need to download the [SBT utility](https://www.scala-sbt.org/download.html))
 
@@ -124,16 +123,16 @@ sudo spark-submit --class timeusage.TimeUsage \
 s3a://***S3BUCKET***/atussum.csv
 ```
 
-## Present in this Repository
+#### Results, Reporting and Interpretation
 
-RDDs, DataSets, DataFrames.
+The histograms below show a comparison of time spending characteristics between -
 
-KMeans Clustering.
+1. Employed Men vs. Women of working age
+2. Employed Men vs. Unemployed Men of working age
 
-Unit Tests using FunSuite.
+The Zepellin notebook is checked in [here](notebooks/Week3%20Results,%20Reporting%20and%20Interpretation.json) and can be imported if required.
 
-Compare efficienty of Operations such as groupByKey vs. reduceByKey.
+![Week3 results](images/TimeUsageDashboard.png)
 
-DataSets Typed Operations.
 
-DataFrames Untyped Operations.
+
